@@ -1,0 +1,67 @@
+import streamlit as st
+import sqlite3
+
+# Connect to DB
+conn = sqlite3.connect('leave_system.db', check_same_thread=False)
+cursor = conn.cursor()
+
+# Initialize DB
+cursor.execute('''CREATE TABLE IF NOT EXISTS leaves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'Pending'
+)''')
+conn.commit()
+
+# Page Navigation
+page = st.sidebar.selectbox("Select User", ["Employee", "Manager"])
+
+# Employee Interface
+if page == "Employee":
+    st.title("Employee Leave Request")
+
+    employee = st.text_input("Enter your name")
+    reason = st.text_area("Enter reason for leave")
+
+    if st.button("Submit Leave Request"):
+        if employee and reason:
+            cursor.execute("INSERT INTO leaves (employee, reason) VALUES (?, ?)", (employee, reason))
+            conn.commit()
+            st.success("Leave request submitted!")
+        else:
+            st.warning("Please fill all fields.")
+
+    if st.button("Check My Leave Status"):
+        if employee:
+            cursor.execute("SELECT reason, status FROM leaves WHERE employee=?", (employee,))
+            results = cursor.fetchall()
+            if results:
+                for r in results:
+                    st.info(f"Reason: {r[0]} | Status: {r[1]}")
+            else:
+                st.warning("No requests found.")
+        else:
+            st.warning("Enter your name to check status.")
+
+# Manager Interface
+elif page == "Manager":
+    st.title("Manager Panel")
+
+    cursor.execute("SELECT id, employee, reason, status FROM leaves WHERE status='Pending'")
+    leaves = cursor.fetchall()
+
+    if leaves:
+        for leave in leaves:
+            with st.expander(f"Request from {leave[1]}"):
+                st.write(f"Reason: {leave[2]}")
+                if st.button(f"Approve - ID {leave[0]}"):
+                    cursor.execute("UPDATE leaves SET status='Approved' WHERE id=?", (leave[0],))
+                    conn.commit()
+                    st.success("Leave approved!")
+                if st.button(f"Reject - ID {leave[0]}"):
+                    cursor.execute("UPDATE leaves SET status='Rejected' WHERE id=?", (leave[0],))
+                    conn.commit()
+                    st.error("Leave rejected.")
+    else:
+        st.info("No pending requests.")
